@@ -1,18 +1,20 @@
 # 青龙面板常用签到脚本合集 (qinglongScripts)
 
-本项目汇总了青龙面板日常运行的高频实用签到脚本，涵盖网盘、社区论坛、机场、PT站、海外通讯工具及 Telegram Bot 批量打卡等任务。所有脚本均已适配青龙面板环境，具备完善的多账号支持、防风控随机延时、自动重试与全渠道推送通知能力。
+本项目汇总了青龙面板日常运行的高频实用签到脚本，涵盖网盘、社区论坛、机场、PT站、海外通讯工具及 Telegram Bot 批量打卡等任务。
+
+所有脚本均已遵循青龙面板规范深度优化，**独立单文件设计，绝无多余无用任务生成**。内置多账号支持、防风控随机延时、自动重试与全渠道推送通知能力。
 
 ---
 
 ## 📋 脚本清单与定时建议
 
-| 任务名称 | 脚本入口 | 建议 Cron | 运行环境 | 说明 |
+| 任务名称 | 脚本文件 | 建议 Cron | 运行环境 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
 | **天翼云盘签到** | `ty_netdisk_checkin.py` | `1 16 * * *` | Python3 | 每日打卡与空间抽奖，支持多账号密码自动 RSA 加密登录 |
 | **百度贴吧签到** | `tieba_checkin.py` | `1 0 * * *` | Python3 | 批量签到账号下关注的全部贴吧，支持多账号与随机延时 |
 | **恩山论坛签到** | `enshan_checkin.py` | `39 12 * * *` | Python3 | 恩山论坛自动访问签到领恩山币，支持 Cookie 多账号 |
 | **ikuuu签到** | `ikuuu_checkin.py` | `0 21 * * *` | Python3 | ikuuu 机场每日自动打卡续命领取流量，支持多账号 |
-| **PT站批量签到** | `run_all.py` | `0 8 * * *` | Python3 | 一键执行 `scripts/` 目录下的所有 PT 站点签到（内置 PTZone，支持灵活扩展） |
+| **PT站批量签到** | `pt_checkin.py` | `0 8 * * *` | Python3 | PT 站点自动签到（内置 PTZone，支持灵活配置与扩展） |
 | **PingMe签到** | `PingMeSignin.js` | `0 16 * * *` | Node.js | PingMe App 每日金币签到与自动看视频奖励 |
 | **Telegram多账号多任务签到** | `tg_multi_checkin.py` | `0 8 * * *` | Python3 | 纯轻量化 MTProto 批处理签到，支持多账号、多Bot、按钮点击、SOCKS5代理 |
 
@@ -20,17 +22,20 @@
 
 ## 🚀 青龙面板订阅 / 拉库配置
 
-在青龙面板 **「订阅管理」** 中新建订阅，或在终端中运行以下命令：
+仓库已做**极致精简优化**，每个脚本严格对应一个定时任务。在青龙面板中订阅时**无需繁琐的白名单或黑名单配置**，直接拉取即可：
 
+### 订阅命令
 ```bash
-ql repo https://github.com/jiu-you/qinglongScripts.git "checkin|run_all|PingMe|tg" "" "" "main"
+ql repo https://github.com/jiu-you/qinglongScripts.git "" "" "" "main"
 ```
 
-> **参数说明：**
-> - 仓库地址：`https://github.com/jiu-you/qinglongScripts.git`
-> - 分支：`main`
-> - 脚本匹配规则：`checkin|run_all|PingMe|tg`（自动识别并添加仓库内的所有签到任务）
-> - 若使用私有仓库或 SSH 密钥，请在青龙订阅管理中配置对应的 SSH Key。
+> **面板配置指引：**
+> - **名称**：自用签到脚本
+> - **链接**：`https://github.com/jiu-you/qinglongScripts.git`
+> - **定时规则**：`0 8 * * *`（每天自动检查脚本更新）
+> - **白名单 / 黑名单 / 依赖文件**：**留空即可**（不会创建任何多余的任务）
+> - **分支**：`main`
+> - **自动添加/删除任务**：全部勾选「是」
 
 ---
 
@@ -55,31 +60,24 @@ ql repo https://github.com/jiu-you/qinglongScripts.git "checkin|run_all|PingMe|t
 #### 🟢 Node.js 依赖
 | 依赖名称 | 说明 | 必需脚本 |
 | :--- | :--- | :--- |
-| `got@11` | 轻量级 HTTP 请求库 | PingMe 签到、推送通知 |
+| `got@11` | 轻量级 HTTP 请求库 | PingMe 签到 |
 | `tough-cookie` | RFC6265 Cookie 容器与解析 | PingMe 签到 |
 | `iconv-lite` | 纯 JS 字符编码转换 | PingMe 签到 |
-| `crypto-js` | 常用加密解密算法 | 推送通知与签名计算 |
-| `undici` | 现代 Node 高性能网络客户端 | `sendNotify.js` 推送通知 |
+| `crypto-js` | 常用加密解密算法 | 签名计算与安全校验 |
 
 #### 🐧 Linux 依赖（若 Python 编译 tgcrypto 等需要）
-- `gcc`
-- `g++`
-- `make`
-- `libffi-dev`
-- `openssl-dev`
+- `gcc` `g++` `make` `libffi-dev` `openssl-dev`
 
 ---
 
 ### 2. 命令行一键安装（进入青龙容器后执行）
 
 ```bash
-# 1. 安装 Python3 依赖
+# 安装 Python3 依赖
 pip3 install -r requirements.txt
 
-# 2. 安装 Node.js 依赖
-pnpm install
-# 或使用全局安装
-pnpm add -g got@11 tough-cookie iconv-lite crypto-js undici
+# 安装 Node.js 依赖
+pnpm add -g got@11 tough-cookie iconv-lite crypto-js
 ```
 
 ---
@@ -93,7 +91,7 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js undici
 pip3 install -q requests rsa pyrogram tgcrypto pysocks pycryptodome >/dev/null 2>&1 || true
 
 ## 确保 Node.js 核心依赖
-pnpm add -g got@11 tough-cookie iconv-lite crypto-js undici >/dev/null 2>&1 || true
+pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 ```
 
 ---
@@ -143,8 +141,8 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js undici >/dev/null 2>&1 || t
 
 ---
 
-### 5. PT站批量签到 (`run_all.py` / `scripts/ptzone_checkin.py`)
-`run_all.py` 会自动扫描并按序执行 `scripts/` 目录下所有 `*_checkin.py`。每个 PT 站点均继承自 `common/pt_base.py`，遵循统一的前缀变量规则：
+### 5. PT站批量签到 (`pt_checkin.py`)
+采用 NexusPHP 通用架构设计，自动加载配置的 PT 站点并执行每日打卡：
 
 | 变量名 | 是否必填 | 默认值 | 说明 |
 | :--- | :--- | :--- | :--- |
@@ -153,16 +151,13 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js undici >/dev/null 2>&1 || t
 | `{PREFIX}_ENABLE` | 可选 | `1` | 是否启用该站点（`1` 启用，`0` 禁用） |
 | `{PREFIX}_SIGN_PATH` | 可选 | `/attendance.php` | 签到请求路径 |
 | `{PREFIX}_METHOD` | 可选 | `GET` | 请求方式（`GET` 或 `POST`） |
-| `CHECKIN_RANDOM_DELAY` | 可选 | `1` | `run_all.py` 是否先执行全局随机等待（默认开启） |
+| `CHECKIN_RANDOM_DELAY` | 可选 | `1` | 是否先执行全局随机等待（默认开启） |
 | `CHECKIN_RANDOM_START_HOUR` | 可选 | `8` | 随机签到窗口起始时间（点） |
 | `CHECKIN_RANDOM_END_HOUR` | 可选 | `20` | 随机签到窗口截止时间（点） |
 
 > **以 PTZone 为例：**
 > - `PTZONE_BASE_URL` = `https://ptzone.xyz`
-> - `PTZONE_COOKIE` = `填入您的 PTZone Cookie`
->
-> **扩展新站点：**
-> 参考 `docs/how_to_add_site.md`，只需在 `scripts/` 下新建 `xxx_checkin.py` 并继承基类指定前缀即可，`run_all.py` 会自动发现并执行。
+> - `PTZONE_COOKIE` = `填入您的 PTZone 完整 Cookie`
 
 ---
 
@@ -187,16 +182,15 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js undici >/dev/null 2>&1 || t
 
 ---
 
-## 📢 统一通知渠道配置 (notify.py / sendNotify.js)
+## 📢 统一通知渠道配置
 
-脚本库内置了开箱即用的全能推送模块，只需在青龙环境变量中配置对应渠道的 Key，即可在签到成功或失败时接收详细推送：
+所有脚本均自动集成青龙面板全局通知系统（直接调用青龙面板内置的 `notify.py` / `sendNotify.js`），支持以下主流推送渠道，直接在青龙面板「环境变量」中配置对应渠道的 Key 即可：
 
 - **PushPlus**: 配置 `PUSH_PLUS_TOKEN`
 - **Server酱**: 配置 `PUSH_KEY`
-- **Telegram 机器人**: 配置 `TG_BOT_TOKEN` 与 `TG_USER_ID`（支持 `TG_PROXY_HOST` / `TG_PROXY_PORT` 代理）
-- **Bark (iOS)**: 配置 `BARK_PUSH`（如设备 Key 或私有服务器 URL）
-- **企业微信应用**: 配置 `QYWX_AM`
-- **企业微信机器人**: 配置 `QYWX_KEY`
+- **Telegram 机器人**: 配置 `TG_BOT_TOKEN` 与 `TG_USER_ID`
+- **Bark (iOS)**: 配置 `BARK_PUSH`
+- **企业微信应用 / 机器人**: 配置 `QYWX_AM` 或 `QYWX_KEY`
 - **钉钉机器人**: 配置 `DD_BOT_TOKEN` 与 `DD_BOT_SECRET`
 - **飞书机器人**: 配置 `FSKEY`
 - **邮箱通知**: 配置 `SMTP_SERVER`, `SMTP_EMAIL`, `SMTP_PASSWORD`
@@ -209,38 +203,18 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js undici >/dev/null 2>&1 || t
 ```text
 .
 ├── .gitignore              # Git 忽略配置
+├── LICENSE                 # 开源许可
 ├── README.md               # 项目使用说明文档
 ├── requirements.txt        # Python3 依赖清单
 ├── package.json            # Node.js 依赖清单
-├── notify.py               # 统一 Python 推送通知模块
-├── sendNotify.js           # 统一 Node.js 推送通知模块
 │
 ├── ty_netdisk_checkin.py   # 天翼云盘自动签到抽奖
 ├── tieba_checkin.py        # 百度贴吧一键签到
 ├── enshan_checkin.py       # 恩山无线论坛打卡
 ├── ikuuu_checkin.py        # ikuuu 机场流量打卡
-├── run_all.py              # PT 站批量签到聚合调度器
+├── pt_checkin.py           # PT 站自动签到
 ├── PingMeSignin.js         # PingMe 签到与视频硬币领取
-├── tg_multi_checkin.py     # Telegram 多账号多任务通用签到
-│
-├── common/                 # PT 签到核心公共库
-│   ├── __init__.py
-│   ├── notify_ql.py        # 青龙通知集成
-│   ├── pt_base.py          # NexusPHP / PT 签到基类
-│   ├── state.py            # 连续打卡状态维护
-│   └── utils.py            # 通用工具函数
-│
-├── scripts/                # PT 各站点具体实现
-│   ├── __init__.py
-│   └── ptzone_checkin.py   # PTZone 站点签到实现
-│
-├── docs/                   # 辅助文档
-│   ├── env_vars.md         # PT 站环境变量详细说明
-│   ├── how_to_add_site.md  # 如何新增自定义 PT 站点
-│   └── ptzone.md           # PTZone 站点特别说明
-│
-└── tools/
-    └── gen_env_docs.py     # 环境变量文档自动生成工具
+└── tg_multi_checkin.py     # Telegram 多账号多任务通用签到
 ```
 
 ---

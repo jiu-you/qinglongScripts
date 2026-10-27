@@ -1,22 +1,125 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+cron: 0 8 * * *
+new Env('PT站签到')
+"""
 
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
+import sys
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 from urllib.parse import parse_qsl
 
 import requests
 
-from common.utils import must_env, opt_env, env_bool, env_int, join_url, build_session, now_ts
-from common.notify_ql import send as notify_send
-from common.state import get_fail_count, set_fail_count, reset_fail
+# ---------------- 统一通知模块加载 ----------------
+hadsend = False
+send = None
+try:
+    from notify import send
+    hadsend = True
+except ImportError:
+    ql_scripts = "/ql/data/scripts"
+    if os.path.isdir(ql_scripts) and ql_scripts not in sys.path:
+        sys.path.insert(0, ql_scripts)
+    try:
+        from notify import send
+        hadsend = True
+    except ImportError:
+        pass
 
+def notify_send(title: str, content: str):
+    if hadsend and send:
+        try:
+            send(title, content)
+            return
+        except Exception as e:
+            print(f"[Notify] 发送通知失败: {e}")
+    print(f"📢 {title}\n{content}")
+
+# ---------------- 通用状态持久化 ----------------
+DEFAULT_STATE_FILE = os.getenv("CHECKIN_STATE_FILE", "/ql/data/checkin_state.json")
+
+def _load_state(path: str) -> Dict[str, Any]:
+    try:
+        if not os.path.exists(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+def _save_state(path: str, data: Dict[str, Any]) -> None:
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+def get_fail_count(key: str, state_file: str = DEFAULT_STATE_FILE) -> int:
+    data = _load_state(state_file)
+    return int(data.get(key, {}).get("fail_count", 0) or 0)
+
+def set_fail_count(key: str, count: int, state_file: str = DEFAULT_STATE_FILE) -> None:
+    data = _load_state(state_file)
+    obj = data.get(key, {})
+    obj["fail_count"] = int(count)
+    data[key] = obj
+    _save_state(state_file, data)
+
+def reset_fail(key: str, state_file: str = DEFAULT_STATE_FILE) -> None:
+    set_fail_count(key, 0, state_file=state_file)
+
+# ---------------- 工具辅助函数 ----------------
+def now_ts() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+def opt_env(name: str, default: str = "") -> str:
+    v = os.getenv(name)
+    return default if v is None else str(v).strip()
+
+def env_bool(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return str(v).strip().lower() not in ("0", "false", "no", "off", "")
+
+def env_int(name: str, default: int) -> int:
+    v = os.getenv(name)
+    if v is None or str(v).strip() == "":
+        return default
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return default
+
+def join_url(base: str, path: str) -> str:
+    base = base.rstrip("/")
+    if not path.startswith("/"):
+        path = "/" + path
+    return base + path
+
+def build_session(cookie: str, ua: str = None, referer: str = None) -> requests.Session:
+    s = requests.Session()
+    headers = {
+        "Cookie": cookie,
+        "User-Agent": ua or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/120 Safari/537.36",
+    }
+    if referer:
+        headers["Referer"] = referer
+    s.headers.update(headers)
+    return s
 
 def _parse_post_data(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]:
     raw = (raw or "").strip()
@@ -29,7 +132,6 @@ def _parse_post_data(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]:
             pass
     return "form", dict(parse_qsl(raw, keep_blank_values=True))
 
-
 @dataclass
 class CheckinResult:
     ok: bool
@@ -38,7 +140,7 @@ class CheckinResult:
     url: str = ""
     notified: bool = False
 
-
+# ---------------- PT 站点基类 ----------------
 class PTCheckinBase:
     site_name: str = "PT Site"
     env_prefix: str = "PT"
@@ -64,23 +166,19 @@ class PTCheckinBase:
 
     default_notify_on_success: bool = False
     default_fail_notify_threshold: int = 1
-
     default_enable: bool = True
 
     def env(self, name: str, default: str = "") -> str:
         return opt_env(f"{self.env_prefix}_{name}", default)
 
-    def must(self, name: str) -> str:
-        return must_env(f"{self.env_prefix}_{name}")
-
     def enabled(self) -> bool:
         return env_bool(f"{self.env_prefix}_ENABLE", self.default_enable)
 
     def base_url(self) -> str:
-        return self.must("BASE_URL").strip()
+        return self.env("BASE_URL").strip()
 
     def cookie(self) -> str:
-        return self.must("COOKIE").strip()
+        return self.env("COOKIE").strip()
 
     def ua(self) -> str:
         return self.env(
@@ -91,7 +189,7 @@ class PTCheckinBase:
 
     def referer(self) -> str:
         base = self.base_url()
-        return self.env("REFERER", base.rstrip("/") + "/")
+        return self.env("REFERER", base.rstrip("/") + "/" if base else "")
 
     def method(self) -> str:
         return (self.env("METHOD", self.default_method) or "GET").upper()
@@ -189,6 +287,13 @@ class PTCheckinBase:
 
     def run(self, notify: bool = True) -> CheckinResult:
         title = f"{self.site_name} 签到"
+        base = self.base_url()
+        cookie = self.cookie()
+
+        if not base or not cookie:
+            msg = f"[{now_ts()}]\n⏭️ 未配置 {self.env_prefix}_BASE_URL 或 {self.env_prefix}_COOKIE，跳过该站点"
+            print(msg)
+            return CheckinResult(ok=True, message=msg, status_code=0, url="", notified=False)
 
         if not self.enabled():
             msg = f"[{now_ts()}]\n⏭️ {self.site_name} 已禁用（{self.env_prefix}_ENABLE=0）"
@@ -198,7 +303,7 @@ class PTCheckinBase:
         self.maybe_sleep_random()
 
         s = self.build()
-        sign_url = join_url(self.base_url(), self.sign_path())
+        sign_url = join_url(base, self.sign_path())
         preflight = (self.preflight_path() or "").strip()
 
         last_err = ""
@@ -207,7 +312,7 @@ class PTCheckinBase:
                 csrf = ""
                 note = ""
                 if preflight:
-                    pf_url = join_url(self.base_url(), preflight)
+                    pf_url = join_url(base, preflight)
                     pf = s.get(pf_url, timeout=self.timeout(), allow_redirects=True)
                     csrf = self.extract_csrf(pf.text or "")
                     if self.csrf_regex:
@@ -271,3 +376,66 @@ class PTCheckinBase:
             notified = True
 
         return CheckinResult(ok=False, message=msg, status_code=0, url=sign_url, notified=notified)
+
+# ---------------- 具体站点实现 ----------------
+class PTZoneCheckin(PTCheckinBase):
+    site_name = "PTZone"
+    env_prefix = "PTZONE"
+    default_sign_path = "/attendance.php"
+    default_method = "GET"
+
+# 注册支持的站点列表
+SUPPORTED_SITES: List[Type[PTCheckinBase]] = [
+    PTZoneCheckin,
+]
+
+def global_random_sleep_once():
+    if opt_env("CHECKIN_RANDOM_DELAY", "1").lower() in ("0", "false", "no", "off", ""):
+        return
+    start = env_int("CHECKIN_RANDOM_START_HOUR", 8)
+    end = env_int("CHECKIN_RANDOM_END_HOUR", 20)
+    if end < start:
+        start, end = end, start
+    if end == start:
+        end = start + 1
+    start = max(0, min(23, start))
+    end = max(1, min(24, end))
+    delay_max = (end - start) * 3600
+    delay = random.randint(0, max(0, delay_max))
+    print(f"[{now_ts()}] [GlobalRandomDelay] window={start:02d}:00-{end:02d}:00 sleep={delay}s")
+    time.sleep(delay)
+
+def main():
+    global_random_sleep_once()
+    os.environ["CHECKIN_SKIP_RANDOM_DELAY"] = "1"
+
+    failed = []
+    ran_count = 0
+    for site_cls in SUPPORTED_SITES:
+        site = site_cls()
+        if not site.base_url() or not site.cookie():
+            continue
+        ran_count += 1
+        print("\n==============================")
+        print(f"RUN PT: {site.site_name}")
+        print("==============================")
+        res = site.run(notify=True)
+        if not res.ok:
+            failed.append((site.site_name, res.message))
+
+    if ran_count == 0:
+        print(f"[{now_ts()}] ℹ️ 未配置任何 PT 站点环境变量（例如 PTZONE_BASE_URL 与 PTZONE_COOKIE）")
+        return 0
+
+    if failed:
+        lines = [f"失败数量：{len(failed)}", ""]
+        for name, msg in failed:
+            lines.append(f"- {name} 签到失败")
+        notify_send("PT站签到汇总：存在失败", "\n".join(lines).strip())
+        return 1
+
+    print(f"\n[{now_ts()}] ✅ 全部 PT 站点签到完成")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
