@@ -17,6 +17,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type
 from urllib.parse import parse_qsl
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import requests
 
 # ---------------- 统一通知模块加载 ----------------
@@ -390,20 +393,36 @@ SUPPORTED_SITES: List[Type[PTCheckinBase]] = [
 ]
 
 def global_random_sleep_once():
-    if opt_env("CHECKIN_RANDOM_DELAY", "1").lower() in ("0", "false", "no", "off", ""):
+    # 默认 0 (立即执行)，避免手动测试或常规执行时无故等待数小时
+    # 如需开启随机延迟，可在青龙环境变量中配置 CHECKIN_RANDOM_DELAY，例如：
+    # CHECKIN_RANDOM_DELAY=300 (在 0~300 秒内随机等待)
+    # CHECKIN_RANDOM_DELAY=60-180 (在 60~180 秒内随机等待)
+    delay_config = opt_env("CHECKIN_RANDOM_DELAY", "0").strip().lower()
+    if delay_config in ("0", "false", "no", "off", "", "none"):
         return
-    start = env_int("CHECKIN_RANDOM_START_HOUR", 8)
-    end = env_int("CHECKIN_RANDOM_END_HOUR", 20)
-    if end < start:
-        start, end = end, start
-    if end == start:
-        end = start + 1
-    start = max(0, min(23, start))
-    end = max(1, min(24, end))
-    delay_max = (end - start) * 3600
-    delay = random.randint(0, max(0, delay_max))
-    print(f"[{now_ts()}] [GlobalRandomDelay] window={start:02d}:00-{end:02d}:00 sleep={delay}s")
-    time.sleep(delay)
+
+    delay = 0
+    try:
+        if "-" in delay_config or "~" in delay_config:
+            parts = delay_config.replace("~", "-").split("-", 1)
+            d_min = int(parts[0].strip())
+            d_max = int(parts[1].strip())
+            delay = random.randint(min(d_min, d_max), max(d_min, d_max))
+        elif delay_config.isdigit():
+            val = int(delay_config)
+            if val == 1:
+                # 兼容旧配置为 1 的情况：默认安全防风控延时 10~180 秒，绝不再休眠数小时
+                delay = random.randint(10, 180)
+            else:
+                delay = random.randint(0, val)
+        elif delay_config in ("true", "yes", "on"):
+            delay = random.randint(10, 180)
+    except Exception:
+        delay = 0
+
+    if delay > 0:
+        print(f"[{now_ts()}] [RandomDelay] 防风控随机延时: 等待 {delay} 秒后开始签到...")
+        time.sleep(delay)
 
 def main():
     global_random_sleep_once()

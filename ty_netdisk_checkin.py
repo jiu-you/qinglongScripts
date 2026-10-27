@@ -14,6 +14,9 @@ import hashlib
 import urllib.parse
 import hmac
 import rsa
+import warnings
+warnings.filterwarnings("ignore")
+
 import requests
 import random
 import os
@@ -31,7 +34,7 @@ except ImportError:
 
 # 随机延迟配置
 max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "3600"))
-random_signin = os.getenv("RANDOM_SIGNIN", "true").lower() == "true"
+random_signin = os.getenv("RANDOM_SIGNIN", "false").lower() == "true"
 
 def format_time_remaining(seconds):
     """格式化时间显示"""

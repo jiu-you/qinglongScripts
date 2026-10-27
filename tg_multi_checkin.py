@@ -125,6 +125,9 @@ for extra_path in [
     if os.path.exists(extra_path) and extra_path not in sys.path:
         sys.path.insert(0, extra_path)
 
+import warnings
+warnings.filterwarnings("ignore")
+
 try:
     from pyrogram import Client
 except ImportError:

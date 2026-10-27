@@ -5,6 +5,9 @@ new Env('恩山论坛签到')
 
 import os
 import re
+import warnings
+warnings.filterwarnings("ignore")
+
 import requests
 import random
 import time
@@ -23,7 +26,7 @@ except ImportError:
 # 配置项
 enshan_cookie = os.environ.get('enshan_cookie', '')
 max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "3600"))
-random_signin = os.getenv("RANDOM_SIGNIN", "true").lower() == "true"
+random_signin = os.getenv("RANDOM_SIGNIN", "false").lower() == "true"
 privacy_mode = os.getenv("PRIVACY_MODE", "true").lower() == "true"
 
 # 恩山论坛配置

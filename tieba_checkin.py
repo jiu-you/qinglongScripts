@@ -13,6 +13,9 @@ import re
 import time
 from datetime import datetime, timedelta
 from typing import Optional, Union
+import warnings
+warnings.filterwarnings("ignore")
+
 import requests
 
 # ---------------- 统一通知模块加载（和其他脚本一样）----------------
@@ -27,7 +30,7 @@ except ImportError:
 
 # 随机延迟配置
 max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "3600"))
-random_signin = os.getenv("RANDOM_SIGNIN", "true").lower() == "true"
+random_signin = os.getenv("RANDOM_SIGNIN", "false").lower() == "true"
 
 def format_time_remaining(seconds):
     """格式化时间显示"""

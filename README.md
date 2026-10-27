@@ -135,7 +135,8 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 | 变量名 | 是否必填 | 格式与示例 | 说明 |
 | :--- | :--- | :--- | :--- |
 | `IKUUU_EMAIL` | **必填** | `user@gmail.com` 或 `邮箱1&邮箱2` | ikuuu 登录邮箱，多账号用 `&` 分隔 |
-| `IKUUU_PASSWD` | **必填** | `password123` 或 `密码1&密码2` | 登录密码，多账号用 `&` 分隔，需与邮箱一一对应 |
+| `IKUUU_PASSWD` | **必填** | `password123` 或 `密码1&密码2` | 登录密码，多账号用 `&` 或 `,` 分隔，需与邮箱一一对应 |
+| `IKUUU_BASE_URL` | 可选 | `https://ikuuu.org` (默认) | 自定义站点域名，默认使用官方最新主站地址 |
 | `PRIVACY_MODE` | 可选 | `true` (默认) / `false` | 隐私脱敏模式 |
 | `RANDOM_SIGNIN` | 可选 | `true` / `false` | 是否启用随机延时 |
 

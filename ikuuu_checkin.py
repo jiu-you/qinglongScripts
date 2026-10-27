@@ -10,6 +10,9 @@ new Env('ikuuu签到')
 """
 
 import os
+import warnings
+warnings.filterwarnings("ignore")
+
 import requests
 import json
 import re
@@ -31,11 +34,11 @@ except ImportError:
 IKUUU_EMAIL = os.environ.get('IKUUU_EMAIL', '')
 IKUUU_PASSWD = os.environ.get('IKUUU_PASSWD', '')
 max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "3600"))
-random_signin = os.getenv("RANDOM_SIGNIN", "true").lower() == "true"
+random_signin = os.getenv("RANDOM_SIGNIN", "false").lower() == "true"
 privacy_mode = os.getenv("PRIVACY_MODE", "true").lower() == "true"
 
-# ikuuu.nl 域名配置
-BASE_URL = 'https://ikuuu.nl'
+# ikuuu 域名配置（支持通过环境变量 IKUUU_BASE_URL 自定义，默认 ikuuu.org）
+BASE_URL = os.environ.get('IKUUU_BASE_URL', 'https://ikuuu.org').rstrip('/')
 LOGIN_URL = f'{BASE_URL}/auth/login'
 CHECK_URL = f'{BASE_URL}/user/checkin'
 
@@ -280,7 +283,7 @@ class IkuuuSigner:
 4. 密码顺序要与邮箱顺序对应
 
 💡 提示: 请确保邮箱和密码正确且一一对应
-🌐 当前域名: ikuuu.de"""
+🌐 当前域名: ikuuu.org"""
             
             print(f"❌ {error_msg}")
             return error_msg, False
@@ -300,7 +303,7 @@ class IkuuuSigner:
         final_msg = f"""🌟 ikuuu签到结果
 
 👤 账号: {mask_email(self.email)}
-🌐 域名: ikuuu.de
+🌐 域名: ikuuu.org
 
 📝 签到: {checkin_msg}
 ⏰ 时间: {datetime.now().strftime('%m-%d %H:%M')}"""
@@ -324,8 +327,8 @@ def main():
             wait_with_countdown(delay_seconds, "ikuuu签到")
     
     # 获取账号配置
-    emails = IKUUU_EMAIL.split(',') if IKUUU_EMAIL else []
-    passwords = IKUUU_PASSWD.split(',') if IKUUU_PASSWD else []
+    emails = [e.strip() for e in re.split(r'[,&\r\n]+', IKUUU_EMAIL) if e.strip()] if IKUUU_EMAIL else []
+    passwords = [p.strip() for p in re.split(r'[,&\r\n]+', IKUUU_PASSWD) if p.strip()] if IKUUU_PASSWD else []
     
     # 清理空白项
     emails = [email.strip() for email in emails if email.strip()]
@@ -344,7 +347,7 @@ IKUUU_EMAIL=user1@example.com,user2@example.com
 IKUUU_PASSWD=password1,password2
 
 💡 提示: 请确保邮箱和密码数量一致且顺序对应
-🌐 当前域名: ikuuu.de"""
+🌐 当前域名: ikuuu.org"""
         
         print(error_msg)
         notify_user("ikuuu签到失败", error_msg)
@@ -359,7 +362,7 @@ IKUUU_PASSWD=password1,password2
 
 🔧 解决方法:
 请确保IKUUU_EMAIL和IKUUU_PASSWD环境变量中的账号数量一致
-🌐 当前域名: ikuuu.de"""
+🌐 当前域名: ikuuu.org"""
         
         print(error_msg)
         notify_user("ikuuu签到失败", error_msg)
@@ -411,7 +414,7 @@ IKUUU_PASSWD=password1,password2
 ✅ 成功: {success_count}个
 ❌ 失败: {total_count - success_count}个
 📊 成功率: {success_count/total_count*100:.1f}%
-🌐 域名: ikuuu.de
+🌐 域名: ikuuu.org
 ⏰ 完成时间: {datetime.now().strftime('%m-%d %H:%M')}"""
         
         # 添加详细结果（最多显示5个账号的详情）
