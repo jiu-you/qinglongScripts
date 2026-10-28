@@ -39,6 +39,7 @@ except Exception as e:
 # 配置项
 IKUUU_EMAIL = os.environ.get('IKUUU_EMAIL', '')
 IKUUU_PASSWD = os.environ.get('IKUUU_PASSWD', '')
+IKUUU_PROXY = os.environ.get('IKUUU_PROXY', os.environ.get('GLOBAL_PROXY', ''))
 max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "3600"))
 random_signin = os.getenv("RANDOM_SIGNIN", "false").lower() == "true"
 privacy_mode = os.getenv("PRIVACY_MODE", "true").lower() == "true"
@@ -117,6 +118,8 @@ class IkuuuSigner:
         self.passwd = passwd
         self.index = index
         self.session = requests.Session()
+        if IKUUU_PROXY:
+            self.session.proxies.update({'http': IKUUU_PROXY, 'https': IKUUU_PROXY})
         self.session.headers.update(HEADER)
 
     def login(self):
