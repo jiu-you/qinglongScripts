@@ -14,14 +14,20 @@ import time
 from datetime import datetime
 
 # ---------------- 统一通知模块加载 ----------------
+import sys
+for p in ["/ql/data/scripts", "..", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]:
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.insert(0, p)
+os.environ.setdefault("HITOKOTO", "false")
+
 hadsend = False
 send = None
 try:
     from notify import send
     hadsend = True
     print("✅ 已加载notify.py通知模块")
-except ImportError:
-    print("⚠️  未加载通知模块，跳过通知功能")
+except Exception as e:
+    print(f"⚠️  未加载通知模块: {e}")
 
 # 配置项
 enshan_cookie = os.environ.get('enshan_cookie', '')

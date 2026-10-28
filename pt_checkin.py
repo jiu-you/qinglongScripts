@@ -23,20 +23,18 @@ warnings.filterwarnings("ignore")
 import requests
 
 # ---------------- 统一通知模块加载 ----------------
+for p in ["/ql/data/scripts", "..", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]:
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.insert(0, p)
+os.environ.setdefault("HITOKOTO", "false")
+
 hadsend = False
 send = None
 try:
     from notify import send
     hadsend = True
-except ImportError:
-    ql_scripts = "/ql/data/scripts"
-    if os.path.isdir(ql_scripts) and ql_scripts not in sys.path:
-        sys.path.insert(0, ql_scripts)
-    try:
-        from notify import send
-        hadsend = True
-    except ImportError:
-        pass
+except Exception:
+    pass
 
 def notify_send(title: str, content: str):
     if hadsend and send:
@@ -167,7 +165,7 @@ class PTCheckinBase:
     default_random_start_hour: int = 8
     default_random_end_hour: int = 20
 
-    default_notify_on_success: bool = False
+    default_notify_on_success: bool = True
     default_fail_notify_threshold: int = 1
     default_enable: bool = True
 

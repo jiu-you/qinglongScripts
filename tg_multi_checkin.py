@@ -135,9 +135,14 @@ except ImportError:
     sys.exit(1)
 
 # 尝试导入青龙通知
+for p in ["/ql/data/scripts", "..", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]:
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.insert(0, p)
+os.environ.setdefault("HITOKOTO", "false")
+
 try:
     from notify import send
-except ImportError:
+except Exception:
     def send(title, content):
         pass
 

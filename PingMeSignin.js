@@ -23,8 +23,9 @@ hostname = api.pingmeapp.net
 
 const $ = new Env('PingMe签到');
 const isNode = $.isNode();
+process.env.HITOKOTO = process.env.HITOKOTO || 'false';
 const notify = isNode ? (function() {
-    for (const p of ['./sendNotify', '../sendNotify', '../qinglong/sendNotify']) {
+    for (const p of ['./sendNotify', '../sendNotify', '/ql/data/scripts/sendNotify', '../qinglong/sendNotify']) {
         try { return require(p); } catch (e) {}
     }
     return { sendNotify: async () => {} };
