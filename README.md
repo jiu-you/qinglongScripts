@@ -24,14 +24,15 @@
 
 ### 订阅命令
 ```bash
-ql repo https://github.com/jiu-you/qinglongScripts.git "" "" "" "main"
+ql repo https://github.com/jiu-you/qinglongScripts.git "" "tools" "" "main"
 ```
 
 > **面板配置指引：**
 > - **名称**：自用签到脚本
 > - **链接**：`https://github.com/jiu-you/qinglongScripts.git`
 > - **定时规则**：`0 8 * * *`（每天自动检查脚本更新）
-> - **白名单 / 黑名单 / 依赖文件**：**留空即可**（不会创建任何多余的任务）
+> - **黑名单 (blacklist)**：填入 `tools`（避免辅助运维脚本被误注册为定时任务）
+> - **白名单 / 依赖文件**：**留空即可**
 > - **分支**：`main`
 > - **自动添加/删除任务**：全部勾选「是」
 
@@ -162,6 +163,30 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 | `TG_ACCOUNT_DELAY` | 可选 | `15-45` (秒) 或 `60-180` | 多账号之间的轮换间隔延时 |
 | `TG_TASK_DELAY` | 可选 | `3-8` (秒) | 同一账号连续给不同 Bot 发指令的间隔延时 |
 
+
+#### 💡 如何获取与生成 `TG_SESSIONS` (新账号添加指引)
+
+初次使用或添加新的 Telegram 账号时，由于 Telegram 首次登录需要实时接收输入短信/客户端验证码（及可能的 2FA 两步验证密码），无法在后台无人值守定时任务中自动完成。本项目内置了开箱即用的登录辅助工具：
+
+1. **进入终端执行交互式登录**（在宿主机或青龙终端执行）：
+   ```bash
+   docker exec -it qinglong python3 /ql/data/scripts/jiu-you_qinglongScripts_main/tools/login_tg.py
+   ```
+2. **按终端提示输入**：
+   - **账号别名**：如 `my_account`（用于在签到日志与推送通知中标识）；
+   - **手机号**：带国际区号，如 `+8613800000000`；
+   - **登录验证码**：Telegram 官方服务号发送到您客户端的 5 位数字验证码（若开启 2FA 则继续输入密码）；
+3. **复制生成结果**：
+   登录成功后，终端将自动导出 `Session String` 并打印拼接好的配置行：
+   ```text
+   my_account#BQAJVAcAir...很长的Session字符串...
+   ```
+4. **填入青龙面板**：
+   - 打开青龙面板 -> **环境变量** -> 新建变量；
+   - **名称**：`TG_SESSIONS`
+   - **值**：粘贴上面生成的 `my_account#BQAJVAcAir...`
+   - **推荐**：多账号可直接在面板中新建多条独立的 `TG_SESSIONS` 变量，便于单独启用、停用与管理。
+
 ---
 
 ## 📢 统一通知渠道配置
@@ -194,7 +219,10 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 ├── tieba_checkin.py        # 百度贴吧一键签到
 ├── enshan_checkin.py       # 恩山无线论坛打卡
 ├── pt_checkin.py           # PT 站自动签到
-└── tg_multi_checkin.py     # Telegram 多账号多任务通用签到
+├── tg_multi_checkin.py     # Telegram 多账号多任务通用签到
+│
+└── tools/
+    └── login_tg.py         # Telegram Session 交互式登录与生成工具
 ```
 
 ---
