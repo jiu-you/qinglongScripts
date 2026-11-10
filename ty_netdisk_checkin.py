@@ -4,6 +4,7 @@
 cron "1 16 * * *" script-path=xxx.py,tag=匹配cron用
 new Env('天翼云盘签到')
 改编自作者：https://www.52pojie.cn/thread-1231190-1-1.html
+支持 Cookie 缓存与免密签到，自动处理验证码风控
 """
 
 import time
@@ -86,9 +87,24 @@ def notify_user(title, content):
         print(f"📢 {title}")
         print(f"📄 {content}")
 
-# 常量定义
+# 常量与缓存路径定义
 BI_RM = list("0123456789abcdefghijklmnopqrstuvwxyz")
 B64MAP = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+def get_cookie_cache_path():
+    """获取 Cookie 缓存文件路径，优先使用青龙持久化 config 目录"""
+    candidates = [
+        "/ql/data/config/ty_cookies.json",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "ty_cookies.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "ty_cookies.json"),
+    ]
+    for p in candidates:
+        d = os.path.dirname(p)
+        if os.path.isdir(d):
+            return p
+    return candidates[0]
+
+COOKIE_CACHE_FILE = get_cookie_cache_path()
 
 class TianYiYunPan:
     def __init__(self, username, password, index):
@@ -133,6 +149,80 @@ class TianYiYunPan:
         pubkey = rsa.PublicKey.load_pkcs1_openssl_pem(rsa_key.encode())
         result = self.b64tohex((base64.b64encode(rsa.encrypt(f'{string}'.encode(), pubkey))).decode())
         return result
+
+    def parse_cookie_str(self, cookie_str):
+        """解析标准 Cookie 字符串为字典"""
+        cookies = {}
+        if not cookie_str:
+            return cookies
+        for item in str(cookie_str).split(";"):
+            item = item.strip()
+            if "=" in item:
+                k, v = item.split("=", 1)
+                cookies[k.strip()] = v.strip()
+        return cookies
+
+    def apply_cookie(self, cookie_data):
+        """将 Cookie 应用到 session，确保跨域名生效"""
+        if isinstance(cookie_data, str):
+            cookie_dict = self.parse_cookie_str(cookie_data)
+        elif isinstance(cookie_data, dict):
+            cookie_dict = cookie_data
+        else:
+            cookie_dict = {}
+
+        if not cookie_dict:
+            return False
+
+        for k, v in cookie_dict.items():
+            self.session.cookies.set(k, v, domain=".189.cn")
+            self.session.cookies.set(k, v, domain=".cloud.189.cn")
+            self.session.cookies.set(k, v, domain="m.cloud.189.cn")
+            self.session.cookies.set(k, v, domain="api.cloud.189.cn")
+        return True
+
+    def load_cookie_cache(self):
+        """读取持久化缓存的 Cookie"""
+        try:
+            if not os.path.exists(COOKIE_CACHE_FILE):
+                return None
+            with open(COOKIE_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            user_data = data.get(str(self.username))
+            if user_data:
+                return user_data.get("cookies") or user_data.get("cookie_str")
+        except Exception as e:
+            print(f"⚠️ 账号{self.index}: 读取缓存 Cookie 失败 - {e}")
+        return None
+
+    def save_cookie_cache(self):
+        """将当前 Session 的 Cookie 保存到持久化缓存"""
+        try:
+            data = {}
+            if os.path.exists(COOKIE_CACHE_FILE):
+                try:
+                    with open(COOKIE_CACHE_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    data = {}
+
+            cookies_dict = self.session.cookies.get_dict()
+            if not cookies_dict:
+                return
+
+            cookie_header = "; ".join([f"{k}={v}" for k, v in cookies_dict.items()])
+            data[str(self.username)] = {
+                "cookies": cookies_dict,
+                "cookie_str": cookie_header,
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+
+            os.makedirs(os.path.dirname(COOKIE_CACHE_FILE), exist_ok=True)
+            with open(COOKIE_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"💾 账号{self.index}: Cookie 已成功持久化缓存到 {COOKIE_CACHE_FILE}")
+        except Exception as e:
+            print(f"⚠️ 账号{self.index}: 缓存 Cookie 失败 - {e}")
 
     def login(self):
         """登录天翼云盘：兼容 2026 新版 wap 登录页"""
@@ -288,7 +378,7 @@ class TianYiYunPan:
             return False
 
     def sign_in(self):
-        """执行签到"""
+        """执行签到，返回 (is_success, status_msg)"""
         try:
             print(f"🎯 账号{self.index}: 开始签到")
             
@@ -303,10 +393,18 @@ class TianYiYunPan:
             }
             
             response = self.session.get(sign_url, headers=headers, timeout=15)
-            result = response.json()
+            try:
+                result = response.json()
+            except Exception:
+                return False, f"响应解析失败 (HTTP {response.status_code})"
+
+            # 判断是否失效/未登录
+            if response.status_code != 200 or "errorCode" in result:
+                err_msg = result.get('errorMsg') or result.get('errorCode') or "未登录或Cookie失效"
+                return False, f"未登录/失效: {err_msg}"
             
             netdiskBonus = result.get('netdiskBonus', 0)
-            isSign = result.get('isSign', 'true')
+            isSign = str(result.get('isSign', 'true')).lower()
             
             if isSign == "false":
                 status_msg = f"✅ 签到成功，获得 {netdiskBonus}M 空间"
@@ -315,29 +413,59 @@ class TianYiYunPan:
                 status_msg = f"📅 今日已签到，获得 {netdiskBonus}M 空间"
                 print(f"📅 账号{self.index}: {status_msg}")
             
-            return status_msg
+            return True, status_msg
             
         except Exception as e:
             error_msg = f"签到异常: {str(e)}"
             print(f"❌ 账号{self.index}: {error_msg}")
-            return error_msg
+            return False, error_msg
 
-    def main(self):
-        """主执行函数"""
+    def main(self, custom_cookie=None):
+        """主执行函数：Cookie优先，失效后账密登录并自动回写缓存"""
         try:
             print(f"\n==== 账号{self.index} 开始执行 ====")
             print(f"🕐 开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             
-            # 登录
-            if not self.login():
-                error_msg = f"❌ 账号{self.index}: {self.username}\n登录失败，无法完成签到"
-                print(error_msg)
-                return error_msg, False
+            sign_success = False
+            sign_result = ""
             
-            # 签到
-            sign_result = self.sign_in()
+            # 1. 尝试使用 Cookie（优先环境变量 TY_COOKIE，其次本地缓存文件）
+            candidate_cookie = custom_cookie or self.load_cookie_cache()
+            if candidate_cookie and self.apply_cookie(candidate_cookie):
+                cookie_src = "环境变量 TY_COOKIE" if custom_cookie else "本地持久化缓存"
+                print(f"🍪 账号{self.index}: 检测到 [{cookie_src}]，验证有效性中...")
+                sign_success, sign_result = self.sign_in()
+                if sign_success:
+                    print(f"✨ 账号{self.index}: Cookie 有效，免密直接签到成功！")
+                    # 确保持久化缓存已保存/刷新
+                    self.save_cookie_cache()
+                else:
+                    print(f"⚠️ 账号{self.index}: Cookie 无效或已过期 ({sign_result})，准备回退账密登录")
             
-            # 格式化结果
+            # 2. 如果 Cookie 无效或不存在，回退到账号密码登录
+            if not sign_success:
+                if not self.password:
+                    error_msg = f"❌ 账号{self.index}: Cookie 失效且未配置密码，无法登录"
+                    print(error_msg)
+                    return error_msg, False
+
+                print(f"🔑 账号{self.index}: 正在使用账号密码登录...")
+                if not self.login():
+                    error_msg = f"❌ 账号{self.index}: {self.username}\n登录失败，无法完成签到\n💡 提示：若触发了图形验证码，建议在网页版手动登录一次通过验证码，或在青龙添加 TY_COOKIE 环境变量"
+                    print(error_msg)
+                    return error_msg, False
+                
+                # 登录成功，立即持久化保存 Cookie
+                self.save_cookie_cache()
+                
+                # 执行签到
+                sign_success, sign_result = self.sign_in()
+                if not sign_success:
+                    error_msg = f"❌ 账号{self.index}: 登录成功但签到失败 - {sign_result}"
+                    print(error_msg)
+                    return error_msg, False
+            
+            # 3. 格式化结果
             result_msg = f"""☁️ 天翼云盘签到结果
 
 👤 账号信息: {self.username}
@@ -348,9 +476,7 @@ class TianYiYunPan:
             print(result_msg)
             print(f"==== 账号{self.index} 签到完成 ====\n")
             
-            # 判断是否成功
-            is_success = "签到成功" in sign_result or "已签到" in sign_result
-            return result_msg, is_success
+            return result_msg, True
             
         except Exception as e:
             error_msg = f"❌ 账号{self.index}: 执行异常 - {str(e)}"
@@ -373,29 +499,44 @@ def main():
     # 获取环境变量
     ty_username_env = os.getenv("TY_USERNAME", "")
     ty_password_env = os.getenv("TY_PASSWORD", "")
+    ty_cookie_env = os.getenv("TY_COOKIE", "")
     
-    if not ty_username_env or not ty_password_env:
-        error_msg = "❌ 未找到TY_USERNAME或TY_PASSWORD环境变量"
+    if not ty_username_env and not ty_cookie_env:
+        error_msg = "❌ 未找到 TY_USERNAME 或 TY_COOKIE 环境变量"
         print(error_msg)
         notify_user("天翼云盘签到失败", error_msg)
         return
     
-    # 解析多账号
-    usernames = [u.strip() for u in ty_username_env.split('&') if u.strip()]
-    passwords = [p.strip() for p in ty_password_env.split('&') if p.strip()]
-    
-    if len(usernames) != len(passwords):
-        error_msg = "❌ 用户名和密码数量不匹配"
-        print(error_msg)
-        notify_user("天翼云盘签到失败", error_msg)
-        return
-    
-    print(f"📝 共发现 {len(usernames)} 个账号")
+    def split_env(val):
+        if not val:
+            return []
+        if "&" in val:
+            return [x.strip() for x in val.split('&') if x.strip()]
+        if "\n" in val:
+            return [x.strip() for x in val.split('\n') if x.strip()]
+        return [val.strip()]
+
+    usernames = split_env(ty_username_env)
+    passwords = split_env(ty_password_env)
+    cookies = split_env(ty_cookie_env)
+
+    total_count = max(len(usernames), len(cookies))
+    if len(usernames) < total_count:
+        for i in range(len(usernames), total_count):
+            usernames.append(f"账号{i+1}")
+    if len(passwords) < total_count:
+        for _ in range(len(passwords), total_count):
+            passwords.append("")
+    if len(cookies) < total_count:
+        for _ in range(len(cookies), total_count):
+            cookies.append(None)
+
+    print(f"📝 共发现 {total_count} 个账号配置")
     
     success_accounts = 0
     all_results = []
     
-    for index, (username, password) in enumerate(zip(usernames, passwords)):
+    for index, (username, password, custom_cookie) in enumerate(zip(usernames, passwords, cookies)):
         try:
             # 账号间随机等待
             if index > 0:
@@ -405,7 +546,7 @@ def main():
             
             # 执行签到
             tianyi = TianYiYunPan(username, password, index + 1)
-            result_msg, is_success = tianyi.main()
+            result_msg, is_success = tianyi.main(custom_cookie=custom_cookie)
             all_results.append(result_msg)
             
             if is_success:
@@ -422,12 +563,12 @@ def main():
             notify_user(f"天翼云盘账号{index + 1}签到失败", error_msg)
     
     # 发送汇总通知
-    if len(usernames) > 1:
+    if total_count > 1:
         summary_msg = f"""☁️ 天翼云盘签到汇总
 
-📊 总计处理: {len(usernames)}个账号
+📊 总计处理: {total_count}个账号
 ✅ 成功账号: {success_accounts}个
-❌ 失败账号: {len(usernames) - success_accounts}个
+❌ 失败账号: {total_count - success_accounts}个
 📅 执行时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 详细结果请查看各账号单独通知"""

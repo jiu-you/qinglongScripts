@@ -10,12 +10,10 @@
 
 | 任务名称 | 脚本文件 | 建议 Cron | 运行环境 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| **天翼云盘签到** | `ty_netdisk_checkin.py` | `1 16 * * *` | Python3 | 每日打卡与空间抽奖，支持多账号密码自动 RSA 加密登录 |
+| **天翼云盘签到** | `ty_netdisk_checkin.py` | `1 16 * * *` | Python3 | 每日打卡与空间抽奖，支持 Cookie 优先缓存免密签到，自动处理验证码风控 |
 | **百度贴吧签到** | `tieba_checkin.py` | `1 0 * * *` | Python3 | 批量签到账号下关注的全部贴吧，支持多账号与随机延时 |
 | **恩山论坛签到** | `enshan_checkin.py` | `39 12 * * *` | Python3 | 恩山论坛自动访问签到领恩山币，支持 Cookie 多账号 |
-| **ikuuu签到** | `ikuuu_checkin.py` | `0 21 * * *` | Python3 | ikuuu 机场每日自动打卡续命领取流量，支持多账号 |
 | **PT站批量签到** | `pt_checkin.py` | `0 8 * * *` | Python3 | PT 站点自动签到（内置 PTZone，支持灵活配置与扩展） |
-| **PingMe签到** | `PingMeSignin.js` | `0 16 * * *` | Node.js | PingMe App 每日金币签到与自动看视频奖励 |
 | **Telegram多账号多任务签到** | `tg_multi_checkin.py` | `0 8 * * *` | Python3 | 纯轻量化 MTProto 批处理签到，支持多账号、多Bot、按钮点击、SOCKS5代理 |
 
 ---
@@ -103,8 +101,9 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 ### 1. 天翼云盘签到 (`ty_netdisk_checkin.py`)
 | 变量名 | 是否必填 | 格式与示例 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `TY_USERNAME` | **必填** | `13800138000` 或 `账号1&账号2` | 天翼云盘登录手机号/账号，多账号用 `&` 分隔 |
-| `TY_PASSWORD` | **必填** | `Pwd12345` 或 `密码1&密码2` | 对应账号的登录密码，多账号用 `&` 分隔，数量需一致 |
+| `TY_COOKIE` | 可选(推荐) | 浏览器完整 Cookie 字符串 | 优先直接使用 Cookie 签到，绕过登录验证码风控并自动持久化缓存 |
+| `TY_USERNAME` | 必填(若无Cookie) | `13800138000` 或 `账号1&账号2` | 天翼云盘登录手机号/账号，多账号用 `&` 分隔 |
+| `TY_PASSWORD` | 必填(若无Cookie) | `Pwd12345` 或 `密码1&密码2` | 对应账号的登录密码，多账号用 `&` 分隔，数量需一致 |
 | `RANDOM_SIGNIN` | 可选 | `true` (默认) / `false` | 是否开启执行前的随机延时，防止整点风控 |
 | `MAX_RANDOM_DELAY` | 可选 | `3600` (秒，默认 1 小时) | 随机延时的最大秒数范围 (0 ~ 最大秒数) |
 
@@ -131,18 +130,7 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 
 ---
 
-### 4. ikuuu签到 (`ikuuu_checkin.py`)
-| 变量名 | 是否必填 | 格式与示例 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `IKUUU_EMAIL` | **必填** | `user@gmail.com` 或 `邮箱1&邮箱2` | ikuuu 登录邮箱，多账号用 `&` 分隔 |
-| `IKUUU_PASSWD` | **必填** | `password123` 或 `密码1&密码2` | 登录密码，多账号用 `&` 或 `,` 分隔，需与邮箱一一对应 |
-| `IKUUU_BASE_URL` | 可选 | `https://ikuuu.org` (默认) | 自定义站点域名，默认使用官方最新主站地址 |
-| `PRIVACY_MODE` | 可选 | `true` (默认) / `false` | 隐私脱敏模式 |
-| `RANDOM_SIGNIN` | 可选 | `true` / `false` | 是否启用随机延时 |
-
----
-
-### 5. PT站批量签到 (`pt_checkin.py`)
+### 4. PT站批量签到 (`pt_checkin.py`)
 采用 NexusPHP 通用架构设计，自动加载配置的 PT 站点并执行每日打卡：
 
 | 变量名 | 是否必填 | 默认值 | 说明 |
@@ -162,14 +150,7 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 
 ---
 
-### 6. PingMe签到 (`PingMeSignin.js`)
-| 变量名 | 是否必填 | 说明 |
-| :--- | :--- | :--- |
-| `pingme_capture_v3` | **必填** | 使用抓包工具抓取 PingMe App 签到请求所得的完整 JSON 数据结构，包含 `headers` 与 `paramsRaw` |
-
----
-
-### 7. Telegram多账号多任务通用签到 (`tg_multi_checkin.py`)
+### 5. Telegram多账号多任务通用签到 (`tg_multi_checkin.py`)
 采用轻量级进程批处理模式，执行完成后立即释放连接，避免常驻后台导致的死锁与风控：
 
 | 变量名 | 是否必填 | 格式与示例 | 说明 |
@@ -209,12 +190,10 @@ pnpm add -g got@11 tough-cookie iconv-lite crypto-js >/dev/null 2>&1 || true
 ├── requirements.txt        # Python3 依赖清单
 ├── package.json            # Node.js 依赖清单
 │
-├── ty_netdisk_checkin.py   # 天翼云盘自动签到抽奖
+├── ty_netdisk_checkin.py   # 天翼云盘自动签到抽奖 (支持Cookie缓存免密)
 ├── tieba_checkin.py        # 百度贴吧一键签到
 ├── enshan_checkin.py       # 恩山无线论坛打卡
-├── ikuuu_checkin.py        # ikuuu 机场流量打卡
 ├── pt_checkin.py           # PT 站自动签到
-├── PingMeSignin.js         # PingMe 签到与视频硬币领取
 └── tg_multi_checkin.py     # Telegram 多账号多任务通用签到
 ```
 
